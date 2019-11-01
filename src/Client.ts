@@ -186,9 +186,9 @@ function mergeDataProcessorToConfig<WS extends typeof WebSocket>(config: WebSock
   };
 }
 
-function getInvalidOperationOptionsError<T>(options: OperationInput<T>) {
+function getInvalidOperationInputError<T>(input: OperationInput<T>) {
   return getClientError({
-    otherErrors: [new Error(`Operation input must be JSON-parseable, received ${options}`)]
+    otherErrors: [new Error(`Operation input must be JSON-parseable, received ${input}`)]
   });
 }
 
@@ -222,7 +222,7 @@ function getResolveWithInvalidOptionsIO<TVariables, TData>(
   options: OperationInput<TVariables>,
   resolve: ResolveFunction<TData>
 ) {
-  return () => resolve(left(getInvalidOperationOptionsError(options)));
+  return () => resolve(left(getInvalidOperationInputError(options)));
 }
 
 function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
@@ -315,7 +315,7 @@ function _subscribe<WS extends typeof WebSocket, TVariables extends object, TDat
         constructMessage(state.nextOperationId, GQL_START, input),
         message =>
           isNone(message)
-            ? leftIO<ClientError>(constant(getInvalidOperationOptionsError(input)))
+            ? leftIO<ClientError>(constant(getInvalidOperationInputError(input)))
             : rightIO<ClientError, void>(updateClientState(config, state, onNext)),
         map(_ => observable)
       );

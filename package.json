@@ -1,5 +1,5 @@
 {
-  "name": "fp-graphql-ws-client",
+  "name": "fp-ts-graphql-ws-client",
   "version": "0.1.0",
   "description": "A purely functional graphql websocket client using the fp-ts ecosystem",
   "main": "index.ts",
