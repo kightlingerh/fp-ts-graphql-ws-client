@@ -1,0 +1,26 @@
+{
+  "name": "fp-graphql-ws-client",
+  "version": "0.1.0",
+  "description": "A purely functional graphql websocket client using the fp-ts ecosystem",
+  "main": "index.ts",
+  "author": "Harry Kightlinger <kightlingerh@gmail.com>",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "clean": "rimraf lib",
+    "build": "yarn run clean && yarn run prettier-write && tsc",
+    "prettier-write": "prettier --write \"./src/**/*.ts\"",
+    "prettier-check": "prettier --list-different \"./src/**/*.ts\"",
+    "lint": "tslint -p tsconfig.json src/*.ts"
+  },
+  "devDependencies": {
+    "prettier": "^1.18.2",
+    "rimraf": "^3.0.0",
+    "tslint": "^5.20.0",
+    "typescript": "^3.6.4"
+  },
+  "dependencies": {
+    "fp-ts": "^2.1.0",
+    "retry-ts": "^0.1.0"
+  }
+}
