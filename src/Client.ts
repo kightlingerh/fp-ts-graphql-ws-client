@@ -268,7 +268,7 @@ function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, 
               )
             )
           )();
-        }) as any;
+        });
     })
   );
 }
