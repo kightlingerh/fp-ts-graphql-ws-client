@@ -382,3 +382,11 @@ export function subscribe<WS extends typeof WebSocket, TVariables extends object
     return _subscribe(config, input);
   }
 }
+
+export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>) {
+  return {
+    query: query(config),
+    mutation: mutate(config),
+    subscribe: subscribe(config)
+  };
+}
