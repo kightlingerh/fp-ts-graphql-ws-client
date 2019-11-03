@@ -1,6 +1,5 @@
 import { Either } from 'fp-ts/lib/Either';
 import { Option } from 'fp-ts/lib/Option';
-import { Error } from 'tslint/lib/error';
 import { GQL_CLIENT_MESSAGE, GQL_SERVER_MESSAGE } from './GQLMessage';
 import { ConnectionError, WebSocketEventListeners } from './WebSocket';
 export interface GraphQLError {
