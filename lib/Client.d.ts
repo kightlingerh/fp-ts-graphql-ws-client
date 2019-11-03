@@ -28,9 +28,9 @@ interface Observable<T> {
     subscribe(onNext: (value: T) => void): io.IO<Unsubscribe>;
 }
 export interface GraphqlClient {
-    query: <TVariables extends object, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
-    mutate: <TVariables extends object, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
-    subscribe: <TVariables extends object, TData extends object>(input: SubscriptionInput<TVariables>) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
+    query: <TVariables, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
+    mutate: <TVariables, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
+    subscribe: <TVariables, TData extends object>(input: SubscriptionInput<TVariables>) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
 }
 export declare function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>): GraphqlClient;
 export {};

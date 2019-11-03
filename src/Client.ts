@@ -6,7 +6,6 @@ import * as io from 'fp-ts/lib/IO';
 import * as o from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
 import * as te from 'fp-ts/lib/TaskEither';
-import { Error } from 'tslint/lib/error';
 import { GQL_COMPLETE, GQL_CONNECTION_KEEP_ALIVE, GQL_DATA, GQL_START } from './GQLMessage';
 import {
   ClientError,
@@ -241,7 +240,7 @@ function canSendMessage<TData>(ws: WebSocket, connectionTimeout: number, lastTim
     );
 }
 
-function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
+function _mutateOrQuery<WS extends typeof WebSocket, TVariables, TData extends object>(
   config: ClientConfig<WS>,
   input: MutationInput<TVariables> | QueryInput<TVariables>
 ): te.TaskEither<ClientError, TData> {
@@ -287,7 +286,7 @@ function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData
   return [onNext, { subscribe }];
 }
 
-function _subscribe<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
+function _subscribe<WS extends typeof WebSocket, TVariables, TData extends object>(
   config: ClientConfig<WS>,
   input: SubscriptionInput<TVariables>
 ): te.TaskEither<ClientError, Observable<ClientData<TData>>> {
@@ -321,13 +320,9 @@ function _subscribe<WS extends typeof WebSocket, TVariables extends object, TDat
 }
 
 export interface GraphqlClient {
-  query: <TVariables extends object, TData extends object>(
-    input: QueryInput<TVariables>
-  ) => te.TaskEither<ClientError, TData>;
-  mutate: <TVariables extends object, TData extends object>(
-    input: MutationInput<TVariables>
-  ) => te.TaskEither<ClientError, TData>;
-  subscribe: <TVariables extends object, TData extends object>(
+  query: <TVariables, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
+  mutate: <TVariables, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
+  subscribe: <TVariables, TData extends object>(
     input: SubscriptionInput<TVariables>
   ) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
 }
