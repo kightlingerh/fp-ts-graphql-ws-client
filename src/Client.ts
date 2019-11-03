@@ -273,7 +273,6 @@ function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, 
   );
 }
 
-
 function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData<TData>>] {
   let listenerId = 0;
   const listeners: Map<number, ResolveFunction<TData>> = new Map();
@@ -322,9 +321,15 @@ function _subscribe<WS extends typeof WebSocket, TVariables extends object, TDat
 }
 
 export interface GraphqlClient {
-  query: <TVariables extends object, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>
-  mutate: <TVariables extends object, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>
-  subscribe: <TVariables extends object, TData extends object>(input: SubscriptionInput<TVariables>) => te.TaskEither<ClientError, Observable<ClientData<TData>>>
+  query: <TVariables extends object, TData extends object>(
+    input: QueryInput<TVariables>
+  ) => te.TaskEither<ClientError, TData>;
+  mutate: <TVariables extends object, TData extends object>(
+    input: MutationInput<TVariables>
+  ) => te.TaskEither<ClientError, TData>;
+  subscribe: <TVariables extends object, TData extends object>(
+    input: SubscriptionInput<TVariables>
+  ) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
 }
 
 export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>): GraphqlClient {
