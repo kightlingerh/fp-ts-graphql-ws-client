@@ -261,7 +261,7 @@ function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, 
                     constant(getResolveWithClosedConnectionIO(resolve)),
                     flow(
                       sendRawMessage(ws),
-                      io.chain(constant(updateClientState(config, state, resolve)))
+                      io.apSecond(updateClientState(config, state, resolve))
                     )
                   )
                 )
@@ -273,47 +273,6 @@ function _mutateOrQuery<WS extends typeof WebSocket, TVariables extends object, 
   );
 }
 
-export function mutate<WS extends typeof WebSocket>(
-  config: ClientConfig<WS>
-): <TVariables extends object, TData extends object>(
-  input: MutationInput<TVariables>
-) => te.TaskEither<ClientError, TData>;
-export function mutate<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input: MutationInput<TVariables>
-): te.TaskEither<ClientError, TData>;
-export function mutate<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input?: MutationInput<TVariables>
-): any {
-  if (input === undefined) {
-    return <TVariables extends object, TData extends object>(input: MutationInput<TVariables>) =>
-      _mutateOrQuery(config, input);
-  } else {
-    return _mutateOrQuery(config, input);
-  }
-}
-
-export function query<WS extends typeof WebSocket>(
-  config: ClientConfig<WS>
-): <TVariables extends object, TData extends object>(
-  input: QueryInput<TVariables>
-) => te.TaskEither<ClientError, TData>;
-export function query<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input: QueryInput<TVariables>
-): te.TaskEither<ClientError, TData>;
-export function query<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input?: QueryInput<TVariables>
-): any {
-  if (input === undefined) {
-    return <TVariables extends object, TData extends object>(input: QueryInput<TVariables>) =>
-      _mutateOrQuery(config, input);
-  } else {
-    return _mutateOrQuery(config, input);
-  }
-}
 
 function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData<TData>>] {
   let listenerId = 0;
@@ -349,8 +308,8 @@ function _subscribe<WS extends typeof WebSocket, TVariables extends object, TDat
                 constant(te.leftIO(constant(getInvalidOperationInputError(input)))),
                 flow(
                   sendRawMessage(ws),
-                  io.chain(constant(updateClientState(config, state, onNext))),
-                  io.chain(constant(io.of(observable))),
+                  io.apSecond(updateClientState(config, state, onNext)),
+                  io.apSecond(io.of(observable)),
                   te.rightIO
                 )
               )
@@ -362,31 +321,16 @@ function _subscribe<WS extends typeof WebSocket, TVariables extends object, TDat
   );
 }
 
-export function subscribe<WS extends typeof WebSocket>(
-  config: ClientConfig<WS>
-): <TVariables extends object, TData extends object>(
-  input: SubscriptionInput<TVariables>
-) => te.TaskEither<ClientError, TData>;
-export function subscribe<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input: SubscriptionInput<TVariables>
-): te.TaskEither<ClientError, TData>;
-export function subscribe<WS extends typeof WebSocket, TVariables extends object, TData extends object>(
-  config: ClientConfig<WS>,
-  input?: SubscriptionInput<TVariables>
-): any {
-  if (input === undefined) {
-    return <TVariables extends object, TData extends object>(input: SubscriptionInput<TVariables>) =>
-      _subscribe(config, input);
-  } else {
-    return _subscribe(config, input);
-  }
+export interface GraphqlClient {
+  query: <TVariables extends object, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>
+  mutate: <TVariables extends object, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>
+  subscribe: <TVariables extends object, TData extends object>(input: SubscriptionInput<TVariables>) => te.TaskEither<ClientError, Observable<ClientData<TData>>>
 }
 
-export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>) {
+export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>): GraphqlClient {
   return {
-    query: query(config),
-    mutation: mutate(config),
-    subscribe: subscribe(config)
+    query: input => _mutateOrQuery(config, input),
+    mutate: input => _mutateOrQuery(config, input),
+    subscribe: input => _subscribe(config, input)
   };
 }

@@ -19,13 +19,16 @@ import {
 } from './shared';
 
 export interface ConnectionError {
-  readonly type: 'Connection timed out' | 'Invalid url' | 'The server responded with a connection error' | 'Connection has been closed';
+  readonly type:
+    | 'Connection timed out'
+    | 'Invalid url'
+    | 'The server responded with a connection error'
+    | 'Connection has been closed';
   readonly timestamp: number;
 }
 
 export interface WebSocketEventListeners {
-  close: Array<(ev: CloseEvent) => void
-      >;
+  close: Array<(ev: CloseEvent) => void>;
   error: Array<(ev: Event) => void>;
   message: Array<(message: MessageEvent) => void>;
   open: Array<(ev: Event) => void>;
