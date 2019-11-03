@@ -240,7 +240,7 @@ function canSendMessage<TData>(ws: WebSocket, connectionTimeout: number, lastTim
     );
 }
 
-function _mutateOrQuery<WS extends typeof WebSocket, TVariables, TData extends object>(
+function _mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
   input: MutationInput<TVariables> | QueryInput<TVariables>
 ): te.TaskEither<ClientError, TData> {
@@ -286,7 +286,7 @@ function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData
   return [onNext, { subscribe }];
 }
 
-function _subscribe<WS extends typeof WebSocket, TVariables, TData extends object>(
+function _subscribe<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
   input: SubscriptionInput<TVariables>
 ): te.TaskEither<ClientError, Observable<ClientData<TData>>> {
@@ -320,9 +320,9 @@ function _subscribe<WS extends typeof WebSocket, TVariables, TData extends objec
 }
 
 export interface GraphqlClient {
-  query: <TVariables, TData extends object>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
-  mutate: <TVariables, TData extends object>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
-  subscribe: <TVariables, TData extends object>(
+  query: <TVariables, TData>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
+  mutate: <TVariables, TData>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
+  subscribe: <TVariables, TData>(
     input: SubscriptionInput<TVariables>
   ) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
 }
