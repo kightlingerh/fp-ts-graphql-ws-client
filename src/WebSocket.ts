@@ -47,7 +47,7 @@ export interface WebSocketConfig<WS extends typeof WebSocket> {
 
 const DEFAULT_RETRY_POLICY = capDelay(5000, monoidRetryPolicy.concat(exponentialBackoff(200), limitRetries(5)));
 
-const DEFAULT_CONNECTION_TIMEOUT = 1000;
+const DEFAULT_CONNECTION_TIMEOUT = 5000;
 
 const LIVE_WEB_SOCKETS: Map<string, Promise<Either<ConnectionError, WebSocket>>> = new Map();
 

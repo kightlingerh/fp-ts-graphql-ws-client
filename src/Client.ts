@@ -240,7 +240,7 @@ function canSendMessage<TData>(ws: WebSocket, connectionTimeout: number, lastTim
     );
 }
 
-function _mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
+function mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
   input: MutationInput<TVariables> | QueryInput<TVariables>
 ): te.TaskEither<ClientError, TData> {
@@ -272,7 +272,7 @@ function _mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
   );
 }
 
-function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData<TData>>] {
+function getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData<TData>>] {
   let listenerId = 0;
   const listeners: Map<number, ResolveFunction<TData>> = new Map();
   const subscribe = (f: ResolveFunction<TData>): io.IO<Unsubscribe> => {
@@ -286,14 +286,14 @@ function _getObservable<TData>(): [ResolveFunction<TData>, Observable<ClientData
   return [onNext, { subscribe }];
 }
 
-function _subscribe<WS extends typeof WebSocket, TVariables, TData>(
+function subscribe<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
   input: SubscriptionInput<TVariables>
 ): te.TaskEither<ClientError, Observable<ClientData<TData>>> {
   return pipe(
     getWebSocketWithClientState(config),
     te.chain(([ws, state]) => {
-      const [onNext, observable] = _getObservable<TData>();
+      const [onNext, observable] = getObservable<TData>();
       return pipe(
         constructMessage(state.nextOperationId, GQL_START, input),
         o.fold(
@@ -329,8 +329,8 @@ export interface GraphqlClient {
 
 export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>): GraphqlClient {
   return {
-    query: input => _mutateOrQuery(config, input),
-    mutate: input => _mutateOrQuery(config, input),
-    subscribe: input => _subscribe(config, input)
+    query: input => mutateOrQuery(config, input),
+    mutate: input => mutateOrQuery(config, input),
+    subscribe: input => subscribe(config, input)
   };
 }
