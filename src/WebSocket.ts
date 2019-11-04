@@ -1,11 +1,11 @@
 import { now } from 'fp-ts/lib/Date';
 import { Either, isLeft, isRight, left, right } from 'fp-ts/lib/Either';
-import { Lazy } from 'fp-ts/lib/function';
+import { constant, Lazy } from 'fp-ts/lib/function';
 import { IO } from 'fp-ts/lib/IO';
 import { IOEither } from 'fp-ts/lib/IOEither';
 import { exists, fold, fromNullable, isSome, Option } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
-import { chain, fromIO, of } from 'fp-ts/lib/Task';
+import { chain, fromIO } from 'fp-ts/lib/Task';
 import { TaskEither, fromIOEither } from 'fp-ts/lib/TaskEither';
 import { capDelay, exponentialBackoff, limitRetries, monoidRetryPolicy, RetryPolicy, RetryStatus } from 'retry-ts';
 import { retrying } from 'retry-ts/lib/Task';
@@ -49,9 +49,9 @@ const DEFAULT_RETRY_POLICY = capDelay(5000, monoidRetryPolicy.concat(exponential
 
 const DEFAULT_CONNECTION_TIMEOUT = 1000;
 
-const LIVE_WEB_SOCKETS: Map<string, Either<ConnectionError, WebSocket>> = new Map();
+const LIVE_WEB_SOCKETS: Map<string, Promise<Either<ConnectionError, WebSocket>>> = new Map();
 
-function getOpenWebSocket(url: string): IO<Option<Either<ConnectionError, WebSocket>>> {
+function getOpenWebSocket(url: string): IO<Option<Promise<Either<ConnectionError, WebSocket>>>> {
   return () => {
     return fromNullable(LIVE_WEB_SOCKETS.get(url));
   };
@@ -59,8 +59,14 @@ function getOpenWebSocket(url: string): IO<Option<Either<ConnectionError, WebSoc
 
 function setNewWebSocket(url: string, ws: Either<ConnectionError, WebSocket>): IOEither<ConnectionError, WebSocket> {
   return () => {
-    LIVE_WEB_SOCKETS.set(url, ws);
+    LIVE_WEB_SOCKETS.set(url, Promise.resolve(ws));
     return ws;
+  };
+}
+
+function setPendingWebSocket(url: string, ws: Promise<Either<ConnectionError, WebSocket>>): IO<void> {
+  return () => {
+    LIVE_WEB_SOCKETS.set(url, ws);
   };
 }
 
@@ -91,7 +97,7 @@ export function getWebSocket<WS extends typeof WebSocket>({
     fromIO(getOpenWebSocket(url)),
     chain(ws =>
       isSome(ws)
-        ? of(ws.value)
+        ? constant(ws.value)
         : pipe(
             retrying<Either<ConnectionError, WebSocket>>(
               retryPolicy,
@@ -121,11 +127,10 @@ function attemptConnection<WS extends typeof WebSocket>(
   connectionParams?: any | Lazy<any>
 ): (status: RetryStatus) => TaskEither<ConnectionError, WebSocket> {
   return status => () => {
-    return new Promise(resolve => {
+    const p: Promise<Either<ConnectionError, WebSocket>> = new Promise(resolve => {
       const ws = new Constructor(url, protocols);
       const timeout = setTimeout(() => {
         ws.close();
-        clearTimeout(timeout);
         resolve(
           left({
             type: 'Connection timed out',
@@ -137,6 +142,7 @@ function attemptConnection<WS extends typeof WebSocket>(
       [initListener, ...openListeners].forEach(listener => ws.addEventListener('open', listener));
       const ackListener = (message: MessageEvent) => {
         if (isAckMessage(message)) {
+          clearTimeout(timeout);
           ws.removeEventListener('message', ackListener);
           ws.removeEventListener('open', initListener);
           resolve(right(ws));
@@ -144,6 +150,7 @@ function attemptConnection<WS extends typeof WebSocket>(
       };
       const connectionErrorListener = (message: MessageEvent) => {
         if (isConnectionErrorMessage(message)) {
+          clearTimeout(timeout);
           ws.removeEventListener('message', connectionErrorListener);
           ws.removeEventListener('open', initListener);
           resolve(
@@ -155,7 +162,10 @@ function attemptConnection<WS extends typeof WebSocket>(
         }
       };
       ws.addEventListener('message', ackListener);
+      ws.addEventListener('message', connectionErrorListener);
     });
+    setPendingWebSocket(url, p)();
+    return p;
   };
 }
 
