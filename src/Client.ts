@@ -203,11 +203,15 @@ function updateClientState<WS extends typeof WebSocket, TData>(
   currentState: ClientState,
   resolve: ResolveFunction<TData>
 ): io.IO<void> {
-  return setClientState(config, {
-    ...currentState,
-    nextOperationId: increment(currentState.nextOperationId),
-    outstandingOperations: currentState.outstandingOperations.set(currentState.nextOperationId, resolve)
-  });
+  return pipe(
+    () => currentState.outstandingOperations.set(currentState.nextOperationId, resolve),
+    io.apSecond(
+      setClientState(config, {
+        ...currentState,
+        nextOperationId: increment(currentState.nextOperationId)
+      })
+    )
+  );
 }
 
 function getResolveWithInvalidInputIO<TVariables, TData>(

@@ -1,8 +1,10 @@
 {
   "name": "fp-ts-graphql-ws-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A functional graphql websocket client using the fp-ts ecosystem",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "repository": {
@@ -12,7 +14,12 @@
   "bugs": {
     "url": "https://github.com/kightlingerh/fp-ts-graphql-ws-client/issues"
   },
-  "keywords": ["graphql", "fp-ts", "websocket", "typescript"],
+  "keywords": [
+    "graphql",
+    "fp-ts",
+    "websocket",
+    "typescript"
+  ],
   "author": "Harry Kightlinger <kightlingerh@gmail.com>",
   "license": "MIT",
   "private": false,
