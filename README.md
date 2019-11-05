@@ -17,7 +17,7 @@ Start by installing the package, using Yarn or NPM.
  ## Client
  
  ```ts
-import { getGraphqlClient } from 'fp-ts-graphql-ws-client';
+import { getGraphqlClient } from 'fp-ts-graphql-ws-client/lib/client';
 
 const CLIENT_CONFIG = {
   webSocketConstructor: WebSocket,
