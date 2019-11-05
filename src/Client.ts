@@ -1,7 +1,8 @@
 import { sequenceT } from 'fp-ts/lib/Apply';
 import { now } from 'fp-ts/lib/Date';
 import { Either, isRight, left, right } from 'fp-ts/lib/Either';
-import { constant, flow, FunctionN, increment } from 'fp-ts/lib/function';
+import { constant, flow, FunctionN } from 'fp-ts/lib/function';
+import { IO } from 'fp-ts/lib/IO';
 import * as io from 'fp-ts/lib/IO';
 import * as o from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
@@ -56,7 +57,6 @@ interface Observable<T> {
 }
 
 interface ClientState {
-  nextOperationId: number;
   lastMessageReceivedTimestamp: o.Option<number>;
   outstandingOperations: Map<number, ResolveFunction<any>>;
 }
@@ -65,11 +65,15 @@ const CLIENT_STATES: Map<string, ClientState> = new Map();
 
 function constructClientState(): ClientState {
   return {
-    nextOperationId: 0,
     lastMessageReceivedTimestamp: o.none,
     outstandingOperations: new Map()
   };
 }
+
+const getNextOperationId: IO<number> = (function() {
+  let id = 0;
+  return () => id++;
+})();
 
 function getClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>): io.IO<ClientState> {
   return () => {
@@ -84,13 +88,9 @@ function getClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>): 
   };
 }
 
-function setClientState<WS extends typeof WebSocket>(
-  config: ClientConfig<WS>,
-  newState: ClientState
-): io.IO<ClientState> {
+function setClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>, newState: ClientState): io.IO<void> {
   return () => {
     CLIENT_STATES.set(config.url, newState);
-    return newState;
   };
 }
 
@@ -160,8 +160,6 @@ function getDataProcessor<WS extends typeof WebSocket>(config: ClientConfig<WS>)
   };
 }
 
-const taskEitherSequenceT = sequenceT(te.taskEither);
-
 function mergeEventListeners<WS extends typeof WebSocket>(
   config: ClientConfig<WS>,
   eventListeners: Partial<WebSocketEventListeners> = {}
@@ -190,27 +188,20 @@ function getClientErrorFromConnectionError(connectionError?: ConnectionError): C
   });
 }
 
-function getWebSocketWithClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>) {
-  return pipe(
-    getWebSocket(mergeDataProcessorToConfig(config)),
-    te.mapLeft(getClientErrorFromConnectionError),
-    ws => taskEitherSequenceT(ws, te.rightIO(getClientState(config)))
-  );
-}
-
-function updateClientState<WS extends typeof WebSocket, TData>(
+function attachResolver<WS extends typeof WebSocket, TData>(
   config: ClientConfig<WS>,
-  currentState: ClientState,
+  id: number,
   resolve: ResolveFunction<TData>
 ): io.IO<void> {
   return pipe(
-    () => currentState.outstandingOperations.set(currentState.nextOperationId, resolve),
-    io.apSecond(
-      setClientState(config, {
-        ...currentState,
-        nextOperationId: increment(currentState.nextOperationId)
-      })
-    )
+    getClientState(config),
+    io.chain(state => {
+      return () => {
+        state.outstandingOperations.set(id, resolve);
+        return state;
+      };
+    }),
+    io.chain(state => setClientState(config, state))
   );
 }
 
@@ -230,13 +221,18 @@ function getResolveWithClosedConnectionIO<TVariables, TData>(resolve: ResolveFun
   );
 }
 
-function canSendMessage<TData>(ws: WebSocket, connectionTimeout: number, lastTimeout: o.Option<number>) {
+const ioSequenceT = sequenceT(io.io);
+
+function canSendMessage<WS extends typeof WebSocket>(ws: WebSocket, config: ClientConfig<WS>) {
   return (message: string): io.IO<o.Option<string>> =>
     pipe(
-      now,
+      ioSequenceT(getClientState(config), now),
       io.map(
-        time =>
-          [time > o.getOrElse(constant(time))(lastTimeout) + connectionTimeout, ws.readyState === ws.CLOSED] as const
+        ([state, time]) =>
+          [
+            time > o.getOrElse(constant(time))(state.lastMessageReceivedTimestamp) + config.inactivityTimeout,
+            ws.readyState === ws.CLOSED
+          ] as const
       ),
       io.map(([exceedsTimeout, isClosed]) => {
         return isClosed || exceedsTimeout ? o.none : o.some(message);
@@ -244,32 +240,52 @@ function canSendMessage<TData>(ws: WebSocket, connectionTimeout: number, lastTim
     );
 }
 
+function attachIdToStartMessage(input: any) {
+  return (id: number) => [id, constructMessage(id, GQL_START, input)] as const;
+}
+
+function foldMessageIntoIO<WS extends typeof WebSocket, TVariables, TData>(
+  config: ClientConfig<WS>,
+  ws: WebSocket,
+  input: OperationInput<TVariables>,
+  resolve: ResolveFunction<TData>
+) {
+  return ([id, message]: readonly [number, o.Option<string>]): IO<void> => {
+    return pipe(
+      message,
+      o.fold(
+        constant(getResolveWithInvalidInputIO(input, resolve)),
+        flow(
+          canSendMessage(ws, config),
+          io.chain(
+            o.fold(
+              constant(getResolveWithClosedConnectionIO(resolve)),
+              flow(
+                sendRawMessage(ws),
+                io.apSecond(attachResolver(config, id, resolve))
+              )
+            )
+          )
+        )
+      )
+    );
+  };
+}
+
 function mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
   input: MutationInput<TVariables> | QueryInput<TVariables>
 ): te.TaskEither<ClientError, TData> {
   return pipe(
-    getWebSocketWithClientState(config),
-    te.chain(([ws, state]) => {
+    getWebSocket(mergeDataProcessorToConfig(config)),
+    te.mapLeft(getClientErrorFromConnectionError),
+    te.chain(ws => {
       return () =>
         new Promise(resolve => {
           pipe(
-            constructMessage(state.nextOperationId, GQL_START, input),
-            o.fold(
-              constant(getResolveWithInvalidInputIO(input, resolve)),
-              flow(
-                canSendMessage(ws, config.inactivityTimeout, state.lastMessageReceivedTimestamp),
-                io.chain(
-                  o.fold(
-                    constant(getResolveWithClosedConnectionIO(resolve)),
-                    flow(
-                      sendRawMessage(ws),
-                      io.apSecond(updateClientState(config, state, resolve))
-                    )
-                  )
-                )
-              )
-            )
+            getNextOperationId,
+            io.map(attachIdToStartMessage(input)),
+            io.chain(foldMessageIntoIO(config, ws, input, resolve))
           )();
         });
     })
@@ -295,29 +311,16 @@ function subscribe<WS extends typeof WebSocket, TVariables, TData>(
   input: SubscriptionInput<TVariables>
 ): te.TaskEither<ClientError, Observable<ClientData<TData>>> {
   return pipe(
-    getWebSocketWithClientState(config),
-    te.chain(([ws, state]) => {
+    getWebSocket(mergeDataProcessorToConfig(config)),
+    te.mapLeft(getClientErrorFromConnectionError),
+    te.chain<ClientError, WebSocket, Observable<ClientData<TData>>>(ws => {
       const [onNext, observable] = getObservable<TData>();
       return pipe(
-        constructMessage(state.nextOperationId, GQL_START, input),
-        o.fold(
-          constant(te.leftIO<ClientError>(constant(getInvalidOperationInputError(input)))),
-          flow(
-            canSendMessage(ws, config.inactivityTimeout, state.lastMessageReceivedTimestamp),
-            te.rightIO,
-            te.chain(
-              o.fold<string, te.TaskEither<ClientError, Observable<ClientData<TData>>>>(
-                constant(te.leftIO(constant(getInvalidOperationInputError(input)))),
-                flow(
-                  sendRawMessage(ws),
-                  io.apSecond(updateClientState(config, state, onNext)),
-                  io.apSecond(io.of(observable)),
-                  te.rightIO
-                )
-              )
-            )
-          )
-        )
+        getNextOperationId,
+        io.map(attachIdToStartMessage(input)),
+        io.chain(foldMessageIntoIO(config, ws, input, onNext)),
+        io.apSecond(io.of(observable)),
+        te.rightIO
       );
     })
   );
