@@ -88,12 +88,6 @@ function getClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>): 
   };
 }
 
-function setClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>, newState: ClientState): io.IO<void> {
-  return () => {
-    CLIENT_STATES.set(config.url, newState);
-  };
-}
-
 function extractIdFromParsedMessage(parsedMessage: ClientData<object>): o.Option<number> {
   return pipe(
     o.fromEither<ClientError, { id?: number }>(parsedMessage),
@@ -195,13 +189,7 @@ function attachResolver<WS extends typeof WebSocket, TData>(
 ): io.IO<void> {
   return pipe(
     getClientState(config),
-    io.chain(state => {
-      return () => {
-        state.outstandingOperations.set(id, resolve);
-        return state;
-      };
-    }),
-    io.chain(state => setClientState(config, state))
+    io.chain(state => () => state.outstandingOperations.set(id, resolve))
   );
 }
 
