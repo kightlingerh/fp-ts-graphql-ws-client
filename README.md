@@ -22,7 +22,7 @@ import { getGraphqlClient } from 'fp-ts-graphql-ws-client/lib/client';
 const CLIENT_CONFIG = {
   webSocketConstructor: WebSocket,
   url: 'ws://localhost:4000/graphql'
-  inactivityTimeout: 35000 // in milliseconds, should be longer than frequency at which server sends keep alive messages, typically 30ms
+  inactivityTimeout: 35000 // in milliseconds, should be longer than frequency at which server sends keep alive messages, typically 30000ms
   // ... additional parameters for retryPolicy, eventListeners, connectionParams, and protocols beyond 'graphql-ws'
 }
  
