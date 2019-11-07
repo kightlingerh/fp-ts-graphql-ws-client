@@ -2,7 +2,13 @@ import { Either, tryCatch as tryCatchE } from 'fp-ts/lib/Either';
 import { constant, constVoid } from 'fp-ts/lib/function';
 import { chain, fromEither, fromPredicate, mapNullable, none, Option, tryCatch } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
-import { GQL_CLIENT_MESSAGE, GQL_CONNECTION_INIT, GQL_SERVER_MESSAGE, isGQLServerMessage } from './GQLMessage';
+import {
+  GQL_CLIENT_MESSAGE,
+  GQL_CONNECTION_INIT,
+  GQL_SERVER_MESSAGE,
+  GQL_STOP,
+  isGQLServerMessage
+} from './GQLMessage';
 import { ConnectionError, WebSocketEventListeners } from './WebSocket';
 
 export interface GraphQLError {
@@ -64,6 +70,13 @@ export function constructMessage(id: number | undefined, type: GQL_CLIENT_MESSAG
       payload
     })
   );
+}
+
+export function getStopMessage(id: number): string {
+  return JSON.stringify({
+    id,
+    type: GQL_STOP
+  });
 }
 
 export function getConnectionInitMessage(connectionParams?: any) {
