@@ -44,6 +44,7 @@
   },
   "np": {
     "contents": "lib",
-    "yolo": true
+    "yolo": true,
+    "releaseDraft": false
   }
 }
