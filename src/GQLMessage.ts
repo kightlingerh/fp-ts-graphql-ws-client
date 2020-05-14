@@ -69,6 +69,6 @@ export function isGQLServerMessage(str: string): str is GQL_SERVER_MESSAGE {
     GQL_CONNECTION_KEEP_ALIVE,
     GQL_DATA,
     GQL_CONNECTION_ERROR,
-    GQL_COMPLETE
+    GQL_COMPLETE,
   ].includes(str as any);
 }

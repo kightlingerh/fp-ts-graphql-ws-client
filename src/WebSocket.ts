@@ -15,7 +15,8 @@ import {
   extractTypeFromParsedMessage,
   getConnectionInitMessage,
   lazyIOVoid,
-  parseReceivedMessage, WebSocketEventListeners
+  parseReceivedMessage,
+  WebSocketEventListeners,
 } from './shared';
 
 export interface ConnectionError {
@@ -68,9 +69,9 @@ function attachListeners(
 ): IO<Either<ConnectionError, WebSocket>> {
   return () => {
     if (isRight(ws)) {
-      close.forEach(listener => ws.right.addEventListener('close', listener));
-      message.forEach(listener => ws.right.addEventListener('message', listener));
-      error.forEach(listener => ws.right.addEventListener('error', listener));
+      close.forEach((listener) => ws.right.addEventListener('close', listener));
+      message.forEach((listener) => ws.right.addEventListener('message', listener));
+      error.forEach((listener) => ws.right.addEventListener('error', listener));
     }
     return ws;
   };
@@ -83,11 +84,11 @@ export function getWebSocket<WS extends typeof WebSocket>({
   connectionTimeout = DEFAULT_CONNECTION_TIMEOUT,
   protocols = 'graphql-ws',
   eventListeners = DEFAULT_EVENT_LISTENERS,
-  connectionParams
+  connectionParams,
 }: WebSocketConfig<WS>): TaskEither<ConnectionError, WebSocket> {
   return pipe(
     fromIO(getOpenWebSocket(url)),
-    chain(ws =>
+    chain((ws) =>
       isSome(ws)
         ? constant(ws.value)
         : pipe(
@@ -103,8 +104,8 @@ export function getWebSocket<WS extends typeof WebSocket>({
               ),
               isLeft
             ),
-            chain(newWs => fromIOEither(attachListeners(newWs, eventListeners))),
-            chain(newWS => fromIOEither(setNewWebSocket(url, newWS)))
+            chain((newWs) => fromIOEither(attachListeners(newWs, eventListeners))),
+            chain((newWS) => fromIOEither(setNewWebSocket(url, newWS)))
           )
     )
   );
@@ -118,20 +119,20 @@ function attemptConnection<WS extends typeof WebSocket>(
   openListeners: Array<(ev: Event) => void> = [],
   connectionParams?: any | Lazy<any>
 ): (status: RetryStatus) => TaskEither<ConnectionError, WebSocket> {
-  return status => () => {
-    const p: Promise<Either<ConnectionError, WebSocket>> = new Promise(resolve => {
+  return (status) => () => {
+    const p: Promise<Either<ConnectionError, WebSocket>> = new Promise((resolve) => {
       const ws = new Constructor(url, protocols);
       const timeout = setTimeout(() => {
         ws.close();
         resolve(
           left({
             type: 'Connection timed out',
-            timestamp: now()
+            timestamp: now(),
           })
         );
       }, connectionTimeout);
       const initListener = sendInitMessage(ws, connectionParams);
-      [initListener, ...openListeners].forEach(listener => ws.addEventListener('open', listener));
+      [initListener, ...openListeners].forEach((listener) => ws.addEventListener('open', listener));
       const ackListener = (message: MessageEvent) => {
         if (isAckMessage(message)) {
           clearTimeout(timeout);
@@ -148,7 +149,7 @@ function attemptConnection<WS extends typeof WebSocket>(
           resolve(
             left({
               type: 'The server responded with a connection error',
-              timestamp: now()
+              timestamp: now(),
             })
           );
         }
@@ -164,7 +165,7 @@ function attemptConnection<WS extends typeof WebSocket>(
 function sendInitMessage(ws: WebSocket, connectionParams?: any | Lazy<any>): IO<void> {
   return pipe(
     getConnectionInitMessage(typeof connectionParams === 'function' ? connectionParams() : connectionParams),
-    fold(lazyIOVoid, message => () => ws.send(message))
+    fold(lazyIOVoid, (message) => () => ws.send(message))
   );
 }
 
@@ -172,7 +173,7 @@ function isAckMessage(message: MessageEvent): boolean {
   return pipe(
     parseReceivedMessage(message.data),
     extractTypeFromParsedMessage,
-    exists(type => type === GQL_CONNECTION_ACK)
+    exists((type) => type === GQL_CONNECTION_ACK)
   );
 }
 
@@ -180,6 +181,6 @@ function isConnectionErrorMessage(message: MessageEvent): boolean {
   return pipe(
     parseReceivedMessage(message.data),
     extractTypeFromParsedMessage,
-    exists(type => type === GQL_CONNECTION_ERROR)
+    exists((type) => type === GQL_CONNECTION_ERROR)
   );
 }
