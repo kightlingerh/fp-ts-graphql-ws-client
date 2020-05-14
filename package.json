@@ -31,13 +31,13 @@
     "lint": "tslint -p tsconfig.json src/*.ts"
   },
   "devDependencies": {
-    "prettier": "^1.18.2",
-    "rimraf": "^3.0.0",
-    "tslint": "^5.20.0",
+    "prettier": "^2.0.5",
+    "rimraf": "^3.0.2",
+    "tslint": "^6.1.2",
     "typescript": "^3.6.4"
   },
   "dependencies": {
     "fp-ts": "^2.1.0",
-    "retry-ts": "^0.1.0"
+    "retry-ts": "^0.1.2"
   }
 }
