@@ -28,9 +28,11 @@
     "build": "yarn run clean && yarn run prettier-write && tsc",
     "prettier-write": "prettier --write \"./src/**/*.ts\"",
     "prettier-check": "prettier --list-different \"./src/**/*.ts\"",
-    "lint": "tslint -p tsconfig.json src/*.ts"
+    "lint": "tslint -p tsconfig.json src/*.ts",
+    "release": "np"
   },
   "devDependencies": {
+    "np": "^6.2.3",
     "prettier": "^2.0.5",
     "rimraf": "^3.0.2",
     "tslint": "^6.1.2",
@@ -39,5 +41,9 @@
   "dependencies": {
     "fp-ts": "^2.1.0",
     "retry-ts": "^0.1.2"
+  },
+  "np": {
+    "contents": "lib",
+    "yolo": true
   }
 }
