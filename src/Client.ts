@@ -4,7 +4,6 @@ import { Either, isRight, left, right } from 'fp-ts/lib/Either';
 import { constant, flow, FunctionN } from 'fp-ts/lib/function';
 import { IO } from 'fp-ts/lib/IO';
 import * as io from 'fp-ts/lib/IO';
-import { isEmpty, size } from 'fp-ts/lib/Map';
 import * as o from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
 import * as te from 'fp-ts/lib/TaskEither';
@@ -13,14 +12,13 @@ import {
   ClientError,
   constructMessage,
   extractTypeFromParsedMessage,
-  getClientError,
   getStopMessage,
-  GraphQLError,
+  GraphQLError, graphqlToClientError,
   lazyIOVoid,
   parseReceivedMessage,
-  sendRawMessage
+  sendRawMessage, tree, WebSocketEventListeners
 } from './shared';
-import { ConnectionError, getWebSocket, WebSocketConfig, WebSocketEventListeners } from './WebSocket';
+import { ConnectionError, getWebSocket, WebSocketConfig } from './WebSocket';
 
 export interface ClientConfig<WS extends typeof WebSocket> extends WebSocketConfig<WS> {
   inactivityTimeout: number;
@@ -40,23 +38,20 @@ export interface QueryInput<TVariables> {
   variables: TVariables;
 }
 
-export interface SubscriptionInput<TVariables> {
+export interface SubscriptionInput<TVariables, TData> {
   subscription: string; // Graphql subscription string
   operationName: string;
   variables: TVariables;
+  onData: ResolveFunction<TData>
 }
 
-type OperationInput<T> = MutationInput<T> | QueryInput<T> | SubscriptionInput<T>;
+type OperationInput<T> = MutationInput<T> | QueryInput<T> | SubscriptionInput<T, any>;
 
 type ClientData<T> = Either<ClientError, T>;
 
 type ResolveFunction<T> = FunctionN<[ClientData<T>], void>;
 
 type Unsubscribe = io.IO<void>;
-
-interface Observable<T> {
-  subscribe(onNext: (value: T) => void): io.IO<Unsubscribe>;
-}
 
 interface ClientState {
   lastMessageReceivedTimestamp: o.Option<number>;
@@ -137,9 +132,9 @@ function getDataProcessor<WS extends typeof WebSocket>(config: ClientConfig<WS>)
           const errors = extractErrorsFromParsedMessage(parsedMessage);
           const data = extractDataFromParsedMessage(parsedMessage);
           const result: Either<ClientError, any> = o.isSome(errors)
-            ? left(getClientError({ graphqlErrors: errors.value }))
+            ? left(errors.value.map(graphqlToClientError) as ClientError)
             : o.isNone(data)
-            ? left(getClientError({ otherErrors: [new Error('No data received')] }))
+            ? left([tree(`no data received`)])
             : right(data.value);
           operation.value(result);
         }
@@ -172,16 +167,12 @@ function mergeDataProcessorToConfig<WS extends typeof WebSocket>(config: ClientC
   };
 }
 
-function getInvalidOperationInputError<T>(input: OperationInput<T>) {
-  return getClientError({
-    otherErrors: [new Error(`Operation input must be JSON-parseable, received ${input}`)]
-  });
+function getInvalidOperationInputError<T>(input: OperationInput<T>): ClientError {
+  return [tree(`Operation input must be JSON-parseable, received ${input}`)];
 }
 
-function getClientErrorFromConnectionError(connectionError?: ConnectionError): ClientError {
-  return getClientError({
-    connectionError: o.fromNullable(connectionError)
-  });
+function getClientErrorFromConnectionError(connectionError: ConnectionError): ClientError {
+  return [tree(`connection error: ${connectionError.type} at: ${connectionError.timestamp}`)]
 }
 
 function attachResolver<WS extends typeof WebSocket, TData>(
@@ -206,7 +197,7 @@ function getResolveWithClosedConnectionIO<TVariables, TData>(resolve: ResolveFun
   return pipe(
     now,
     io.map(timestamp =>
-      resolve(left(getClientErrorFromConnectionError({ timestamp, type: 'Connection has been closed' })))
+      resolve(left([tree(`connection error: connection timed out at: ${timestamp}`)]))
     )
   );
 }
@@ -227,7 +218,7 @@ function canSendMessage<WS extends typeof WebSocket>(ws: WebSocket, config: Clie
 }
 
 function attachIdToStartMessage(input: any) {
-  return (id: number) => [id, constructMessage(id, GQL_START, input)] as const;
+  return (id: number) => [id, constructMessage(id, GQL_START, input)] as readonly [number, o.Option<string>];
 }
 
 function foldMessageIntoIOResolver<WS extends typeof WebSocket, TVariables, TData>(
@@ -278,98 +269,39 @@ function mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
   );
 }
 
-const OBSERVABLES: Map<string, readonly [ResolveFunction<any>, Observable<ClientData<any>>]> = new Map(); // operationName -> Observable
 
-function constructObservable<TData>(
-  ws: WebSocket,
-  operationId: number,
-  startMessage: string
-): readonly [ResolveFunction<TData>, Observable<ClientData<TData>>] {
-  let listenerId = 0;
-  const stopMessage = getStopMessage(operationId);
-  const listeners: Map<number, ResolveFunction<TData>> = new Map();
-  const subscribe = (f: ResolveFunction<TData>): io.IO<Unsubscribe> => {
-    return () => {
-      const id = listenerId++;
-      listeners.set(id, f);
-      if (size(listeners) === 1) {
-        ws.send(startMessage);
-      }
-      return () => {
-        listeners.delete(id);
-        if (isEmpty(listeners)) {
-          ws.send(stopMessage);
-        }
-      };
-    };
-  };
-  const onNext = (value: ClientData<TData>) => listeners.forEach(f => f(value));
-  return [onNext, { subscribe }];
-}
-
-function getObservable<TData>(ws: WebSocket, operationName: string, operationId: number) {
-  return (startMessage: string): io.IO<[number, readonly [ResolveFunction<TData>, Observable<ClientData<TData>>]]> => {
-    return () => {
-      const existingObservableInfo = o.fromNullable(OBSERVABLES.get(operationName));
-      if (o.isSome(existingObservableInfo)) {
-        return [operationId, existingObservableInfo.value];
-      } else {
-        const newObservable = constructObservable<TData>(ws, operationId, startMessage);
-        OBSERVABLES.set(operationName, newObservable);
-        return [operationId, newObservable];
-      }
-    };
-  };
-}
-
-function attachSubscriber<WS extends typeof WebSocket, TData>(config: ClientConfig<WS>) {
-  return ([operationId, [setNext, observable]]: [
-    number,
-    readonly [ResolveFunction<TData>, Observable<ClientData<TData>>]
-  ]): io.IO<Observable<ClientData<TData>>> => {
-    return pipe(
+function getUnsubscribe<WS extends typeof WebSocket>(config: ClientConfig<WS>, ws: WebSocket, id: number) {
+  return pipe(
       getClientState(config),
-      io.chain(state => () => state.outstandingOperations.set(operationId, setNext)),
-      io.apSecond(io.of(observable))
-    );
-  };
+      io.chain(state => {
+        return () => {
+          state.outstandingOperations.delete(id);
+          ws.send(getStopMessage(id))
+        }
+      })
+  )
 }
 
-function foldMessageIntoIOObservable<WS extends typeof WebSocket, TVariables, TData>(
-  config: ClientConfig<WS>,
-  ws: WebSocket,
-  input: SubscriptionInput<TVariables>
-) {
-  return ([id, message]: readonly [number, o.Option<string>]): IO<
-    Either<ClientError, Observable<ClientData<TData>>>
-  > => {
-    return pipe(
-      message,
-      o.fold(
-        constant(io.of(left(getInvalidOperationInputError(input)))),
-        flow(
-          getObservable<TData>(ws, input.operationName, id),
-          io.chain(attachSubscriber(config)),
-          io.map(right)
-        )
-      )
-    );
-  };
-}
 
 function subscribe<WS extends typeof WebSocket, TVariables, TData>(
   config: ClientConfig<WS>,
-  input: SubscriptionInput<TVariables>
-): te.TaskEither<ClientError, Observable<ClientData<TData>>> {
+  input: SubscriptionInput<TVariables, TData>
+): te.TaskEither<ClientError, Unsubscribe> {
   return pipe(
     getWebSocket(mergeDataProcessorToConfig(config)),
     te.mapLeft(getClientErrorFromConnectionError),
-    te.chain<ClientError, WebSocket, Observable<ClientData<TData>>>(ws => {
+    te.chain<ClientError, WebSocket, Unsubscribe>(ws => {
       return te.fromIOEither(
         pipe(
           getNextOperationId,
           io.map(attachIdToStartMessage(input)),
-          io.chain(foldMessageIntoIOObservable(config, ws, input))
+          io.chain(([id, message]) => {
+            return () => {
+              foldMessageIntoIOResolver(config, ws, input, input.onData)([id, message])();
+              return getUnsubscribe(config, ws, id)
+            }
+          }),
+          io.map(right)
         )
       );
     })
@@ -380,8 +312,8 @@ export interface GraphqlClient {
   query: <TVariables, TData>(input: QueryInput<TVariables>) => te.TaskEither<ClientError, TData>;
   mutate: <TVariables, TData>(input: MutationInput<TVariables>) => te.TaskEither<ClientError, TData>;
   subscribe: <TVariables, TData>(
-    input: SubscriptionInput<TVariables>
-  ) => te.TaskEither<ClientError, Observable<ClientData<TData>>>;
+    input: SubscriptionInput<TVariables, TData>
+  ) => te.TaskEither<ClientError, Unsubscribe>;
 }
 
 export function getGraphqlClient<WS extends typeof WebSocket>(config: ClientConfig<WS>): GraphqlClient {

@@ -1,7 +1,9 @@
 import { Either, tryCatch as tryCatchE } from 'fp-ts/lib/Either';
 import { constant, constVoid } from 'fp-ts/lib/function';
-import { chain, fromEither, fromPredicate, mapNullable, none, Option, tryCatch } from 'fp-ts/lib/Option';
+import {NonEmptyArray} from 'fp-ts/lib/NonEmptyArray';
+import { chain, fromEither, fromPredicate, mapNullable, Option, tryCatch } from 'fp-ts/lib/Option';
 import { pipe } from 'fp-ts/lib/pipeable';
+import {Forest, Tree} from 'fp-ts/lib/Tree';
 import {
   GQL_CLIENT_MESSAGE,
   GQL_CONNECTION_INIT,
@@ -9,7 +11,24 @@ import {
   GQL_STOP,
   isGQLServerMessage
 } from './GQLMessage';
-import { ConnectionError, WebSocketEventListeners } from './WebSocket';
+
+export interface ClientError extends NonEmptyArray<Tree<string>> {}
+
+const empty: Array<never> = []
+
+export function tree<A>(value: A, forest: Forest<A> = empty): Tree<A> {
+  return {
+    value,
+    forest
+  }
+}
+
+export function graphqlToClientError(error: GraphQLError): Tree<string> {
+  return tree(error.message, [
+    tree('locations:', error.locations.map(location => tree(`line: ${location.line}, column: ${location.column}`))),
+    tree('paths:', error.path.map(p => tree(p)))
+  ]);
+}
 
 export interface GraphQLError {
   message: string;
@@ -20,16 +39,7 @@ export interface GraphQLError {
   path: string[];
 }
 
-export interface OperationError {
-  graphqlErrors: GraphQLError[];
-  otherErrors: Error[];
-}
-
-export interface ClientError extends OperationError {
-  connectionError: Option<ConnectionError>;
-}
-
-export function isObject(obj: any): obj is object {
+export function isObject(obj: unknown): obj is object {
   return obj !== null && typeof obj === 'object';
 }
 
@@ -44,22 +54,8 @@ export function parseReceivedMessage(payload: string): Either<ClientError, objec
       }
     },
     () =>
-      getClientError({
-        otherErrors: [new Error(`Message must be a JSON-parsable object. Got: ${payload}`)]
-      })
+        [tree(`Message must be a JSON-parsable object. Got: ${payload}`)]
   );
-}
-
-export function getClientError({
-  connectionError = none,
-  graphqlErrors = [],
-  otherErrors = []
-}: Partial<ClientError>): ClientError {
-  return {
-    connectionError,
-    graphqlErrors,
-    otherErrors
-  };
 }
 
 export function constructMessage(id: number | undefined, type: GQL_CLIENT_MESSAGE, payload?: any): Option<string> {
@@ -96,6 +92,13 @@ export function extractTypeFromParsedMessage(parsedMessage: Either<ClientError, 
 }
 
 export const lazyIOVoid = constant(constVoid);
+
+export interface WebSocketEventListeners {
+  close: Array<(ev: CloseEvent) => void>;
+  error: Array<(ev: Event) => void>;
+  message: Array<(message: MessageEvent) => void>;
+  open: Array<(ev: Event) => void>;
+}
 
 export const DEFAULT_EVENT_LISTENERS: WebSocketEventListeners = {
   open: [],

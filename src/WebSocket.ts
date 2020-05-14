@@ -15,7 +15,7 @@ import {
   extractTypeFromParsedMessage,
   getConnectionInitMessage,
   lazyIOVoid,
-  parseReceivedMessage
+  parseReceivedMessage, WebSocketEventListeners
 } from './shared';
 
 export interface ConnectionError {
@@ -26,14 +26,6 @@ export interface ConnectionError {
     | 'Connection has been closed';
   readonly timestamp: number;
 }
-
-export interface WebSocketEventListeners {
-  close: Array<(ev: CloseEvent) => void>;
-  error: Array<(ev: Event) => void>;
-  message: Array<(message: MessageEvent) => void>;
-  open: Array<(ev: Event) => void>;
-}
-
 /** Provides the API for creating and managing a WebSocket connection to a server, as well as for sending and receiving data on the connection. */
 export interface WebSocketConfig<WS extends typeof WebSocket> {
   webSocketConstructor: WS;
