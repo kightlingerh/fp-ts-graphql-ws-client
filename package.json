@@ -43,7 +43,6 @@
     "retry-ts": "^0.1.2"
   },
   "np": {
-    "yolo": true,
-    "releaseDraft": false
+    "yolo": true
   }
 }
