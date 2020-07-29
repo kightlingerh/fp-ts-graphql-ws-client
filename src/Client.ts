@@ -105,9 +105,8 @@ function extractErrorsFromParsedMessage(parsedMessage: ClientData<object>): o.Op
 
 function extractDataFromParsedMessage<T>(parsedMessage: ClientData<object>): o.Option<T> {
 	return pipe(
-		o.fromEither<ClientError, { payload?: { data?: T } }>(parsedMessage),
+		o.fromEither<ClientError, { payload?: T }>(parsedMessage),
 		o.mapNullable((message) => message.payload),
-		o.mapNullable((payload) => payload.data)
 	);
 }
 
