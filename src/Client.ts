@@ -58,7 +58,7 @@ type Unsubscribe = io.IO<void>;
 
 interface ClientState {
 	lastMessageReceivedTimestamp: o.Option<number>;
-	outstandingOperations: Map<number, ResolveFunction<any>>;
+	outstandingOperations: Map<string, ResolveFunction<any>>;
 }
 
 const CLIENT_STATES: Map<string, ClientState> = new Map();
@@ -70,9 +70,9 @@ function constructClientState(): ClientState {
 	};
 }
 
-const getNextOperationId: IO<number> = (function () {
+const getNextOperationId: IO<string> = (function () {
 	let id = 0;
-	return () => id++;
+	return () => `${id++}`;
 })();
 
 function getClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>): io.IO<ClientState> {
@@ -88,9 +88,9 @@ function getClientState<WS extends typeof WebSocket>(config: ClientConfig<WS>): 
 	};
 }
 
-function extractIdFromParsedMessage(parsedMessage: ClientData<object>): o.Option<number> {
+function extractIdFromParsedMessage(parsedMessage: ClientData<object>): o.Option<string> {
 	return pipe(
-		o.fromEither<ClientError, { id?: number }>(parsedMessage),
+		o.fromEither<ClientError, { id?: string }>(parsedMessage),
 		o.mapNullable((message) => message.id)
 	);
 }
@@ -180,7 +180,7 @@ function getClientErrorFromConnectionError(connectionError: ConnectionError): Cl
 
 function attachResolver<WS extends typeof WebSocket, TData>(
 	config: ClientConfig<WS>,
-	id: number,
+	id: string,
 	resolve: ResolveFunction<TData>
 ): io.IO<void> {
 	return pipe(
@@ -219,7 +219,7 @@ function canSendMessage<WS extends typeof WebSocket>(ws: WebSocket, config: Clie
 }
 
 function attachIdToStartMessage(input: any) {
-	return (id: number) => [id, constructMessage(id, GQL_START, input)] as readonly [number, o.Option<string>];
+	return (id: string) => [id, constructMessage(id, GQL_START, input)] as readonly [string, o.Option<string>];
 }
 
 function foldMessageIntoIOResolver<WS extends typeof WebSocket, TVariables, TData>(
@@ -228,7 +228,7 @@ function foldMessageIntoIOResolver<WS extends typeof WebSocket, TVariables, TDat
 	input: OperationInput<TVariables>,
 	resolve: ResolveFunction<TData>
 ) {
-	return ([id, message]: readonly [number, o.Option<string>]): IO<void> => {
+	return ([id, message]: readonly [string, o.Option<string>]): IO<void> => {
 		return pipe(
 			message,
 			o.fold(
@@ -267,7 +267,7 @@ function mutateOrQuery<WS extends typeof WebSocket, TVariables, TData>(
 	);
 }
 
-function getUnsubscribe<WS extends typeof WebSocket>(config: ClientConfig<WS>, ws: WebSocket, id: number) {
+function getUnsubscribe<WS extends typeof WebSocket>(config: ClientConfig<WS>, ws: WebSocket, id: string) {
 	return pipe(
 		getClientState(config),
 		io.chain((state) => {

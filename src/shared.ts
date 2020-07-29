@@ -63,17 +63,17 @@ export function parseReceivedMessage(payload: string): Either<ClientError, objec
 	);
 }
 
-export function constructMessage(id: number | undefined, type: GQL_CLIENT_MESSAGE, payload?: any): Option<string> {
+export function constructMessage(id: string | undefined, type: GQL_CLIENT_MESSAGE, payload?: any): Option<string> {
 	return tryCatch(() =>
 		JSON.stringify({
-			id: `${id}`,
+			id,
 			type,
 			payload
 		})
 	);
 }
 
-export function getStopMessage(id: number): string {
+export function getStopMessage(id: string): string {
 	return JSON.stringify({
 		id,
 		type: GQL_STOP
